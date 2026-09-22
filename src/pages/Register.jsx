@@ -38,11 +38,15 @@ export const Register = () => {
       setError('Passwords do not match.');
       return;
     }
+    if (!formData.email || !formData.email.trim().toLowerCase().endsWith('@gmail.com')) {
+      setError('Please enter a valid Gmail address (e.g. yourname@gmail.com).');
+      return;
+    }
 
     loginUser({
       name: formData.name,
       mobile: `+91 ${formData.mobile}`,
-      email: formData.email || `${formData.name.toLowerCase().replace(/\s+/g, '.')}@samasya.example`,
+      email: formData.email.trim().toLowerCase(),
       role: formData.role,
       district: formData.district,
       village: formData.village,
@@ -130,14 +134,16 @@ export const Register = () => {
             </div>
 
             <div>
-              <label className="block font-bold text-slate-700 mb-1">Fictional Email</label>
+              <label className="block font-bold text-slate-700 mb-1">Gmail Address <span className="text-red-500">*</span></label>
               <input
                 type="email"
+                required
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                placeholder="e.g. user.demo@samasya.example"
+                placeholder="yourname@gmail.com"
                 className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-medium"
               />
+              <p className="text-[10px] text-slate-400 mt-0.5">Only @gmail.com addresses are accepted</p>
             </div>
           </div>
 

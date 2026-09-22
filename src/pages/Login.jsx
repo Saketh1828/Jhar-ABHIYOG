@@ -12,6 +12,7 @@ export const Login = () => {
   const [formData, setFormData] = useState({
     name: 'Birsa Soren',
     mobile: '9876543210',
+    email: '',
     password: 'password123',
     role: 'citizen',
     district: 'Dumka'
@@ -33,11 +34,15 @@ export const Login = () => {
       setError('Please enter your full name.');
       return;
     }
+    if (!formData.email || !formData.email.trim().toLowerCase().endsWith('@gmail.com')) {
+      setError('Please enter a valid Gmail address (e.g. yourname@gmail.com).');
+      return;
+    }
 
     try {
       // Attempt backend authentication
       const res = await api.auth.login({
-        email: `${formData.mobile}@samasya.example`,
+        email: formData.email.trim().toLowerCase(),
         password: formData.password || 'password123'
       });
 
@@ -48,6 +53,7 @@ export const Login = () => {
       loginUser({
         name: formData.name,
         mobile: `+91 ${cleanedMobile}`,
+        email: formData.email.trim().toLowerCase(),
         role: formData.role,
         district: formData.district,
         isAadhaarVerified: currentUser.isAadhaarVerified || false
@@ -59,6 +65,7 @@ export const Login = () => {
       loginUser({
         name: formData.name,
         mobile: `+91 ${cleanedMobile}`,
+        email: formData.email.trim().toLowerCase(),
         role: formData.role,
         district: formData.district,
         isAadhaarVerified: currentUser.isAadhaarVerified || false
@@ -127,6 +134,25 @@ export const Login = () => {
                 className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-[#005A36] focus:outline-none font-semibold"
               />
             </div>
+          </div>
+
+          {/* Gmail Email */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">
+              Gmail Address <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <span className="absolute left-3 top-2.5 text-slate-400 text-sm font-bold">@</span>
+              <input
+                type="email"
+                required
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                placeholder="yourname@gmail.com"
+                className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-[#005A36] focus:outline-none font-semibold"
+              />
+            </div>
+            <p className="text-[10px] text-slate-400 mt-0.5">Only @gmail.com addresses are accepted</p>
           </div>
 
           {/* Mobile Number */}
