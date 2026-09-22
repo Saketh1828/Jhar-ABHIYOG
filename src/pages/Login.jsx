@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Shield, Phone, Lock, User, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { Shield, Phone, Lock, User, ArrowRight, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { MockAadhaarModal } from '../components/common/MockAadhaarModal';
+import { api } from '../services/api';
 
 export const Login = () => {
-  const { loginUser } = useApp();
+  const { loginUser, currentUser } = useApp();
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
@@ -16,42 +18,69 @@ export const Login = () => {
   });
 
   const [error, setError] = useState('');
+  const [isAadhaarModalOpen, setIsAadhaarModalOpen] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.mobile || formData.mobile.length < 10) {
-      setError('Please enter a valid 10-digit mobile number.');
+    setError('');
+
+    const cleanedMobile = String(formData.mobile).replace(/\D/g, '');
+    if (!/^[6-9]\d{9}$/.test(cleanedMobile)) {
+      setError('Please enter a valid 10-digit Indian mobile number (e.g. 9876543210 starting with 6, 7, 8, or 9).');
       return;
     }
-    if (!formData.name) {
-      setError('Please enter your name.');
+    if (!formData.name.trim()) {
+      setError('Please enter your full name.');
       return;
     }
 
-    loginUser({
-      name: formData.name,
-      mobile: `+91 ${formData.mobile}`,
-      role: formData.role,
-      district: formData.district
-    });
+    try {
+      // Attempt backend authentication
+      const res = await api.auth.login({
+        email: `${formData.mobile}@samasya.example`,
+        password: formData.password || 'password123'
+      });
 
-    navigate('/');
+      if (res && res.token) {
+        localStorage.setItem('sih_auth_token', res.token);
+      }
+
+      loginUser({
+        name: formData.name,
+        mobile: `+91 ${cleanedMobile}`,
+        role: formData.role,
+        district: formData.district,
+        isAadhaarVerified: currentUser.isAadhaarVerified || false
+      });
+
+      navigate('/');
+    } catch (err) {
+      // Allow demo login fallback if offline while setting real state
+      loginUser({
+        name: formData.name,
+        mobile: `+91 ${cleanedMobile}`,
+        role: formData.role,
+        district: formData.district,
+        isAadhaarVerified: currentUser.isAadhaarVerified || false
+      });
+      navigate('/');
+    }
   };
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-[#FAF8F5]">
-      <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-2xl shadow-xl border border-slate-200">
+      <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-3xl shadow-xl border border-slate-200">
         
         {/* Header */}
         <div className="text-center space-y-2">
           <div className="w-14 h-14 rounded-2xl bg-[#005A36] text-amber-400 mx-auto flex items-center justify-center shadow-lg border-2 border-amber-400">
             <Shield className="w-8 h-8" />
           </div>
-          <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">
-            Citizen & Stakeholder Login
+          <h2 className="text-2xl font-black text-slate-900 tracking-tight">
+            SAMASYA NIVARK
           </h2>
-          <p className="text-xs text-slate-500 font-medium">
-            Jharkhand Samadhan • Crowdsourced Problem Solving Portal
+          <p className="text-xs text-slate-500 font-bold">
+            "From Community Problems to Real-World Solutions."
           </p>
         </div>
 
@@ -75,8 +104,10 @@ export const Login = () => {
             >
               <option value="citizen">Citizen / Villager</option>
               <option value="student">Student / Researcher</option>
-              <option value="government">Government Official</option>
+              <option value="university">University / Faculty</option>
               <option value="industry">Industry / CSR Partner</option>
+              <option value="government">Government / Admin</option>
+              <option value="ngo">NGO / Community Organization</option>
             </select>
           </div>
 
@@ -93,7 +124,7 @@ export const Login = () => {
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="Enter your name"
-                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-[#005A36] focus:outline-none"
+                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-[#005A36] focus:outline-none font-semibold"
               />
             </div>
           </div>
@@ -114,7 +145,7 @@ export const Login = () => {
                 value={formData.mobile}
                 onChange={(e) => setFormData({ ...formData, mobile: e.target.value.replace(/\D/g, '') })}
                 placeholder="10-digit mobile number"
-                className="w-full pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-r-xl text-sm focus:ring-2 focus:ring-[#005A36] focus:outline-none font-mono"
+                className="w-full pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-r-xl text-sm focus:ring-2 focus:ring-[#005A36] focus:outline-none font-mono font-bold"
               />
             </div>
           </div>
@@ -127,10 +158,10 @@ export const Login = () => {
               </label>
               <button
                 type="button"
-                onClick={() => alert("Prototype Notice: Use default password 'password123' to sign in instantly.")}
+                onClick={() => alert("Prototype Notice: Default password is 'password123'.")}
                 className="text-[11px] font-bold text-[#005A36] hover:underline"
               >
-                Forgot Password?
+                FORGOT PASSWORD?
               </button>
             </div>
             <div className="relative">
@@ -146,13 +177,29 @@ export const Login = () => {
             </div>
           </div>
 
+          {/* Optional Mock Aadhaar Verification (Section 4) */}
+          <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 flex items-center justify-between text-xs">
+            <span className="font-bold text-emerald-950 flex items-center gap-1.5">
+              <ShieldCheck className="w-4 h-4 text-[#005A36]" />
+              {currentUser.isAadhaarVerified ? '✓ Aadhaar Verified' : 'Identity Verification'}
+            </span>
+
+            <button
+              type="button"
+              onClick={() => setIsAadhaarModalOpen(true)}
+              className="text-[11px] font-extrabold text-[#005A36] hover:underline bg-white px-2.5 py-1 rounded border border-emerald-300"
+            >
+              {currentUser.isAadhaarVerified ? 'Re-verify' : 'Verify Identity (Aadhaar)'}
+            </button>
+          </div>
+
           {/* Submit */}
           <button
             type="submit"
-            className="w-full py-3.5 px-4 rounded-xl font-extrabold text-sm text-white bg-[#005A36] hover:bg-[#003D24] shadow-md transition-all flex items-center justify-center gap-2"
+            className="w-full py-3.5 px-4 rounded-xl font-black text-sm text-white bg-[#005A36] hover:bg-[#003D24] shadow-md transition-all flex items-center justify-center gap-2"
           >
-            <span>SIGN IN TO PLATFORM</span>
-            <ArrowRight className="w-4 h-4" />
+            <span>LOGIN TO SAMASYA NIVARK</span>
+            <ArrowRight className="w-4 h-4 text-amber-400" />
           </button>
         </form>
 
@@ -160,17 +207,17 @@ export const Login = () => {
           <p className="text-xs text-slate-600">
             Don't have an account?{' '}
             <Link to="/register" className="font-bold text-[#B84A17] hover:underline">
-              New User Registration
+              CREATE ACCOUNT
             </Link>
           </p>
         </div>
 
-        <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-900 flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-amber-600 shrink-0" />
-          <span>Prototype Mode: Click Sign In directly to log in with mock credentials.</span>
-        </div>
-
       </div>
+
+      <MockAadhaarModal
+        isOpen={isAadhaarModalOpen}
+        onClose={() => setIsAadhaarModalOpen(false)}
+      />
     </div>
   );
 };

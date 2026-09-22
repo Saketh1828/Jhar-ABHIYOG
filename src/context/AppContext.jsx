@@ -1,5 +1,14 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { INITIAL_PROBLEMS, INITIAL_NOTIFICATIONS } from '../data/mockData';
+import { 
+  INITIAL_PROBLEMS, 
+  INITIAL_NOTIFICATIONS, 
+  INITIAL_USERS, 
+  INITIAL_UNIVERSITIES, 
+  INITIAL_INDUSTRIES, 
+  INITIAL_PROJECTS, 
+  INITIAL_AUDIT_LOGS 
+} from '../data/mockData';
+import { recommendReceiver } from '../utils/aiReceiverEngine';
 
 const AppContext = createContext();
 
@@ -38,30 +47,115 @@ export const calculatePriority = (affectedPeople, severity, category) => {
   return { priorityScore: score, priority, targetResponse };
 };
 
+export const validateMobileNumber = (mobile) => {
+  const cleaned = String(mobile).replace(/\D/g, '');
+  return /^[6-9]\d{9}$/.test(cleaned);
+};
+
+export const validateDescriptionText = (desc) => {
+  if (!desc || typeof desc !== 'string') return false;
+  const trimmed = desc.trim();
+  return trimmed.length >= 15;
+};
+
 export const AppProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(() => {
     const saved = localStorage.getItem('sih_user');
     return saved ? JSON.parse(saved) : {
-      name: "Birsa Soren",
-      mobile: "+91 98765 43210",
+      name: "",
+      mobile: "",
+      email: "",
       role: "citizen",
-      district: "Dumka",
-      village: "Jama Village",
-      isLoggedIn: true
+      isLoggedIn: false
     };
   });
 
   const [problems, setProblems] = useState(() => {
     const saved = localStorage.getItem('sih_problems');
-    return saved ? JSON.parse(saved) : INITIAL_PROBLEMS;
+    return saved ? JSON.parse(saved) : [];
   });
 
   const [notifications, setNotifications] = useState(() => {
     const saved = localStorage.getItem('sih_notifications');
-    return saved ? JSON.parse(saved) : INITIAL_NOTIFICATIONS;
+    return saved ? JSON.parse(saved) : [];
   });
 
+  const [likedProblemIds, setLikedProblemIds] = useState(() => {
+    const saved = localStorage.getItem('sih_liked_ids');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [trackedProblemIds, setTrackedProblemIds] = useState(() => {
+    const saved = localStorage.getItem('sih_tracked_ids');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [sentEmails, setSentEmails] = useState(() => {
+    const saved = localStorage.getItem('sih_sent_emails');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [users, setUsers] = useState(() => {
+    const saved = localStorage.getItem('sih_users');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [universities, setUniversities] = useState(() => {
+    const saved = localStorage.getItem('sih_universities');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [industries, setIndustries] = useState(() => {
+    const saved = localStorage.getItem('sih_industries');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [projects, setProjects] = useState(() => {
+    const saved = localStorage.getItem('sih_projects');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [auditLogs, setAuditLogs] = useState(() => {
+    const saved = localStorage.getItem('sih_audit_logs');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [isDbConnected, setIsDbConnected] = useState(false);
   const [lastSubmittedId, setLastSubmittedId] = useState(null);
+  const [resolvedAnimationProblem, setResolvedAnimationProblem] = useState(null);
+  const [isDemoEmailModalOpen, setIsDemoEmailModalOpen] = useState(false);
+
+  const [currentLanguage, setCurrentLanguageState] = useState(() => {
+    return localStorage.getItem('sih_language') || 'en';
+  });
+
+  const setLanguage = (langCode) => {
+    setCurrentLanguageState(langCode);
+    localStorage.setItem('sih_language', langCode);
+  };
+
+  // Sync with MongoDB backend API on mount
+  useEffect(() => {
+    const syncBackendData = async () => {
+      try {
+        const health = await api.health();
+        if (health && health.status && health.status.includes('UP')) {
+          setIsDbConnected(true);
+        }
+        const probRes = await api.problems.getAll();
+        if (probRes && probRes.data && Array.isArray(probRes.data) && probRes.data.length > 0) {
+          setProblems(probRes.data);
+        }
+        const projRes = await api.projects.getAll();
+        if (projRes && projRes.data && Array.isArray(projRes.data) && projRes.data.length > 0) {
+          setProjects(projRes.data);
+        }
+      } catch (err) {
+        console.warn("Backend API sync offline. Operating in local mode.");
+      }
+    };
+    syncBackendData();
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('sih_user', JSON.stringify(currentUser));
@@ -75,10 +169,43 @@ export const AppProvider = ({ children }) => {
     localStorage.setItem('sih_notifications', JSON.stringify(notifications));
   }, [notifications]);
 
+  useEffect(() => {
+    localStorage.setItem('sih_liked_ids', JSON.stringify(likedProblemIds));
+  }, [likedProblemIds]);
+
+  useEffect(() => {
+    localStorage.setItem('sih_tracked_ids', JSON.stringify(trackedProblemIds));
+  }, [trackedProblemIds]);
+
+  useEffect(() => {
+    localStorage.setItem('sih_sent_emails', JSON.stringify(sentEmails));
+  }, [sentEmails]);
+
+  useEffect(() => {
+    localStorage.setItem('sih_users', JSON.stringify(users));
+  }, [users]);
+
+  useEffect(() => {
+    localStorage.setItem('sih_universities', JSON.stringify(universities));
+  }, [universities]);
+
+  useEffect(() => {
+    localStorage.setItem('sih_industries', JSON.stringify(industries));
+  }, [industries]);
+
+  useEffect(() => {
+    localStorage.setItem('sih_projects', JSON.stringify(projects));
+  }, [projects]);
+
+  useEffect(() => {
+    localStorage.setItem('sih_audit_logs', JSON.stringify(auditLogs));
+  }, [auditLogs]);
+
   const loginUser = (userData) => {
     const updated = {
       name: userData.name || "Birsa Soren",
       mobile: userData.mobile || "+91 98765 43210",
+      email: userData.email || `${(userData.name || "user").toLowerCase().replace(/\s+/g, '.')}@samasya.example`,
       role: userData.role || "citizen",
       district: userData.district || "Dumka",
       village: userData.village || "Jama",
@@ -93,6 +220,7 @@ export const AppProvider = ({ children }) => {
     setCurrentUser({
       name: "",
       mobile: "",
+      email: "",
       role: "citizen",
       isLoggedIn: false
     });
@@ -102,6 +230,43 @@ export const AppProvider = ({ children }) => {
     setCurrentUser(prev => ({ ...prev, role: newRole }));
   };
 
+  // Like / Support Toggle (Section 23)
+  const toggleLike = (id) => {
+    const isAlreadyLiked = likedProblemIds.includes(id);
+
+    if (isAlreadyLiked) {
+      setLikedProblemIds(prev => prev.filter(item => item !== id));
+      setProblems(prev => prev.map(p => p.id === id ? { ...p, supportersCount: Math.max(0, p.supportersCount - 1) } : p));
+    } else {
+      setLikedProblemIds(prev => [...prev, id]);
+      setProblems(prev => prev.map(p => p.id === id ? { ...p, supportersCount: p.supportersCount + 1 } : p));
+    }
+  };
+
+  // Track Problem Toggle (Section 24 & 25)
+  const toggleTrack = (id) => {
+    const isAlreadyTracked = trackedProblemIds.includes(id);
+
+    if (isAlreadyTracked) {
+      setTrackedProblemIds(prev => prev.filter(item => item !== id));
+    } else {
+      setTrackedProblemIds(prev => [...prev, id]);
+      
+      const prob = problems.find(p => p.id === id);
+      const newNotif = {
+        id: Date.now(),
+        title: "Started Tracking Problem",
+        message: `You are now monitoring progress updates for problem #${id} (${prob?.title || 'Challenge'}).`,
+        time: "Just now",
+        unread: true,
+        type: "status",
+        link: `/tracked-problems`
+      };
+      setNotifications(prev => [newNotif, ...prev]);
+    }
+  };
+
+  // Add Problem (Section 21 & 22: AI Receiver Recommendation Engine integrated)
   const addProblem = (formData) => {
     const { priorityScore, priority, targetResponse } = calculatePriority(
       formData.affectedPeople,
@@ -110,11 +275,13 @@ export const AppProvider = ({ children }) => {
     );
 
     const newId = `JH-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+    const receiverData = recommendReceiver(formData.category, formData.description, formData.district || "Dumka");
 
     const newProblem = {
       id: newId,
       title: formData.title,
-      category: formData.category, // Integrated selected category
+      category: formData.category,
+      subcategory: formData.category,
       aiSuggestedCategory: formData.aiSuggestedCategory || formData.category,
       aiConfidence: formData.aiConfidence || 92,
       isAiCategoryOverridden: formData.isAiCategoryOverridden || false,
@@ -130,18 +297,28 @@ export const AppProvider = ({ children }) => {
       status: "Submitted",
       reportedBy: currentUser.name || "Anonymous Citizen",
       reporterMobile: currentUser.mobile || "+91 98765 43210",
+      reporterEmail: currentUser.email || "citizen.demo@samasya.example",
       dateReported: new Date().toISOString().split('T')[0],
       supportersCount: 1,
+      
+      // AI Receiver recommendation fields (Section 21 & 22)
+      recommendedReceiver: receiverData.recommendedReceiver,
+      receiverType: receiverData.receiverType,
+      whyReceiver: receiverData.whyReceiver,
+      assignedDepartment: receiverData.recommendedReceiver,
+      assignedUniversity: receiverData.assignedUniversity,
+      assignedTeam: null,
+      industryPartner: receiverData.industryPartner,
+
       photos: formData.photos && formData.photos.length > 0 ? formData.photos : [
         "https://images.unsplash.com/photo-1541888946425-d0fbb186a5b3?w=800&q=80"
       ],
-      assignedTeam: null,
       solutionProposed: null,
       history: [
         {
           date: new Date().toISOString().split('T')[0],
           step: "Submitted",
-          note: `Report submitted by ${currentUser.name || 'Citizen'} (AI Category: ${formData.category} - ${formData.aiConfidence || 92}% confidence)`
+          note: `Report submitted by ${currentUser.name || 'Citizen'}. AI Recommended Receiver: ${receiverData.recommendedReceiver}`
         }
       ]
     };
@@ -149,11 +326,14 @@ export const AppProvider = ({ children }) => {
     setProblems(prev => [newProblem, ...prev]);
     setLastSubmittedId(newId);
 
-    // Add automatic system notification
+    // Auto-track reporter's own report
+    setTrackedProblemIds(prev => [...prev, newId]);
+
+    // System notification
     const newNotif = {
       id: Date.now(),
-      title: "Problem Report Registered",
-      message: `Your report '${newProblem.title}' has been successfully logged with ID ${newId}. AI Category: ${newProblem.category}. Priority: ${priority}.`,
+      title: "Problem Report Registered & Routed",
+      message: `Your report '${newProblem.title}' was assigned AI Recommended Receiver: ${receiverData.recommendedReceiver}. Priority: ${priority}.`,
       time: "Just now",
       unread: true,
       type: "status",
@@ -164,26 +344,42 @@ export const AppProvider = ({ children }) => {
     return newProblem;
   };
 
+  // Status update (Section 18: Triggers Resolved Animation Popup)
   const updateProblemStatus = (id, newStatus, note = "", assignedTeam = null, solutionText = null) => {
+    let resolvedItem = null;
+
     setProblems(prev => prev.map(prob => {
       if (prob.id === id) {
+        const resolutionDate = newStatus === 'Resolved' ? new Date().toISOString().split('T')[0] : prob.resolutionDate;
         const updatedHistory = [...prob.history, {
           date: new Date().toISOString().split('T')[0],
           step: newStatus,
-          note: note || `Status changed to ${newStatus}`
+          note: note || `Status updated to ${newStatus}`
         }];
-        return {
+
+        const updated = {
           ...prob,
           status: newStatus,
           history: updatedHistory,
+          resolutionDate,
           ...(assignedTeam ? { assignedTeam } : {}),
-          ...(solutionText ? { solutionProposed: solutionText } : {})
+          ...(solutionText ? { solutionProposed: solutionText, resolutionDescription: solutionText } : {})
         };
+
+        if (newStatus === 'Resolved') {
+          resolvedItem = updated;
+        }
+
+        return updated;
       }
       return prob;
     }));
 
-    // Notification
+    if (resolvedItem) {
+      setResolvedAnimationProblem(resolvedItem);
+    }
+
+    // System Notification
     const newNotif = {
       id: Date.now(),
       title: `Status Update: ${newStatus}`,
@@ -211,10 +407,6 @@ export const AppProvider = ({ children }) => {
     } : p));
   };
 
-  const supportProblem = (id) => {
-    setProblems(prev => prev.map(p => p.id === id ? { ...p, supportersCount: p.supportersCount + 1 } : p));
-  };
-
   const proposeSolution = (id, solutionData) => {
     updateProblemStatus(
       id,
@@ -225,12 +417,190 @@ export const AppProvider = ({ children }) => {
     );
   };
 
+  // Send Email Abstraction Dispatcher (Section 27 & 29)
+  const sendEmail = (emailObj) => {
+    setSentEmails(prev => [emailObj, ...prev]);
+
+    const notif = {
+      id: Date.now(),
+      title: `Email Sent: ${emailObj.subject}`,
+      message: `Simulated dispatches sent to ${emailObj.to}.`,
+      time: "Just now",
+      unread: true,
+      type: "collaboration",
+      link: "#"
+    };
+    setNotifications(prev => [notif, ...prev]);
+  };
+
   const markNotificationRead = (id) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, unread: false } : n));
   };
 
   const markAllNotificationsRead = () => {
     setNotifications(prev => prev.map(n => ({ ...n, unread: false })));
+  };
+
+  // RBAC Helper Actions
+  const changeUserRole = (userId, newRole) => {
+    let targetName = userId;
+    let oldRole = 'User';
+    setUsers(prev => prev.map(u => {
+      if (u.id === userId) {
+        targetName = u.name;
+        oldRole = u.role;
+        return { ...u, role: newRole };
+      }
+      return u;
+    }));
+
+    const newLog = {
+      id: `LOG-${Date.now()}`,
+      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
+      actorName: currentUser.name || "Platform Super Admin",
+      actorRole: currentUser.role || "SUPER_ADMIN",
+      action: "ROLE_CHANGE",
+      target: targetName,
+      details: `Reassigned role from ${oldRole} to ${newRole}`
+    };
+    setAuditLogs(prev => [newLog, ...prev]);
+  };
+
+  const deactivateUser = (userId) => {
+    let targetName = userId;
+    let newStatus = 'Inactive';
+    setUsers(prev => prev.map(u => {
+      if (u.id === userId) {
+        targetName = u.name;
+        newStatus = u.status === 'Active' ? 'Inactive' : 'Active';
+        return { ...u, status: newStatus };
+      }
+      return u;
+    }));
+
+    const newLog = {
+      id: `LOG-${Date.now()}`,
+      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
+      actorName: currentUser.name || "Platform Super Admin",
+      actorRole: currentUser.role || "SUPER_ADMIN",
+      action: "USER_STATUS_CHANGE",
+      target: targetName,
+      details: `Toggled user account status to ${newStatus}`
+    };
+    setAuditLogs(prev => [newLog, ...prev]);
+  };
+
+  const addUniversity = (univData) => {
+    const newId = `UNIV-${String(universities.length + 1).padStart(3, '0')}`;
+    const newUniv = {
+      id: newId,
+      name: univData.name,
+      district: univData.district || "Ranchi",
+      address: univData.address || `${univData.name} Campus`,
+      adminEmail: univData.email || "admin@univ.example",
+      assignedProjects: 0,
+      verifiedStudents: 0,
+      activeFaculty: 0,
+      status: "Active"
+    };
+    setUniversities(prev => [...prev, newUniv]);
+
+    const newUnivUser = {
+      id: `USR-${String(users.length + 1).padStart(3, '0')}`,
+      name: `${univData.name} Admin`,
+      email: univData.email || `admin.${newId.toLowerCase()}@samasya.example`,
+      mobile: "+91 98000 00000",
+      role: "UNIVERSITY_ADMIN",
+      organization: univData.name,
+      organizationId: newId,
+      organizationType: "UNIVERSITY",
+      district: univData.district || "Ranchi",
+      status: "Active",
+      createdDate: new Date().toISOString().split('T')[0]
+    };
+    setUsers(prev => [...prev, newUnivUser]);
+
+    const newLog = {
+      id: `LOG-${Date.now()}`,
+      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
+      actorName: currentUser.name || "Platform Super Admin",
+      actorRole: currentUser.role || "SUPER_ADMIN",
+      action: "CREATE_UNIVERSITY",
+      target: univData.name,
+      details: `Registered new University entity & initialized University Admin account`
+    };
+    setAuditLogs(prev => [newLog, ...prev]);
+  };
+
+  const addIndustry = (indData) => {
+    const newId = `IND-${String(industries.length + 1).padStart(3, '0')}`;
+    const newInd = {
+      id: newId,
+      name: indData.name,
+      district: indData.district || "East Singhbhum",
+      type: indData.type || "CSR Corporate Partner",
+      csrBudget: "₹ 50 Lakhs",
+      sponsoredProjects: 0,
+      adminEmail: indData.email || "csr@industry.example",
+      status: "Active"
+    };
+    setIndustries(prev => [...prev, newInd]);
+
+    const newIndUser = {
+      id: `USR-${String(users.length + 1).padStart(3, '0')}`,
+      name: `${indData.name} CSR Admin`,
+      email: indData.email || `csr.${newId.toLowerCase()}@samasya.example`,
+      mobile: "+91 94000 00000",
+      role: "INDUSTRY_ADMIN",
+      organization: indData.name,
+      organizationId: newId,
+      organizationType: "INDUSTRY",
+      district: indData.district || "East Singhbhum",
+      status: "Active",
+      createdDate: new Date().toISOString().split('T')[0]
+    };
+    setUsers(prev => [...prev, newIndUser]);
+
+    const newLog = {
+      id: `LOG-${Date.now()}`,
+      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
+      actorName: currentUser.name || "Platform Super Admin",
+      actorRole: currentUser.role || "SUPER_ADMIN",
+      action: "CREATE_INDUSTRY",
+      target: indData.name,
+      details: `Registered new Industry entity & initialized Industry Admin account`
+    };
+    setAuditLogs(prev => [newLog, ...prev]);
+  };
+
+  const addProject = (projData) => {
+    const newId = `PROJ-${Math.floor(100 + Math.random() * 900)}`;
+    const newProject = {
+      id: newId,
+      title: projData.title,
+      problemId: projData.problemId,
+      university: projData.university || currentUser.university || "BIT Mesra",
+      leadStudent: projData.leadStudent,
+      facultyMentor: projData.facultyMentor,
+      industrySponsor: projData.industrySponsor || "Tata Steel CSR",
+      status: "Under Development",
+      completion: 15,
+      description: projData.description
+    };
+    setProjects(prev => [...prev, newProject]);
+
+    updateProblemStatus(projData.problemId, "In Progress", `Project #${newId} (${projData.title}) assigned under ${newProject.university}`);
+
+    const newLog = {
+      id: `LOG-${Date.now()}`,
+      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
+      actorName: currentUser.name || "University Admin",
+      actorRole: currentUser.role || "UNIVERSITY_ADMIN",
+      action: "CREATE_PROJECT",
+      target: projData.title,
+      details: `Launched academic problem-solving project for problem #${projData.problemId}`
+    };
+    setAuditLogs(prev => [newLog, ...prev]);
   };
 
   return (
@@ -243,12 +613,33 @@ export const AppProvider = ({ children }) => {
       addProblem,
       updateProblemStatus,
       updateProblemPriority,
-      supportProblem,
+      likedProblemIds,
+      toggleLike,
+      trackedProblemIds,
+      toggleTrack,
       proposeSolution,
       notifications,
       markNotificationRead,
       markAllNotificationsRead,
-      lastSubmittedId
+      lastSubmittedId,
+      resolvedAnimationProblem,
+      setResolvedAnimationProblem,
+      sentEmails,
+      sendEmail,
+      isDemoEmailModalOpen,
+      setIsDemoEmailModalOpen,
+      users,
+      universities,
+      industries,
+      projects,
+      auditLogs,
+      changeUserRole,
+      deactivateUser,
+      addUniversity,
+      addIndustry,
+      addProject,
+      currentLanguage,
+      setLanguage
     }}>
       {children}
     </AppContext.Provider>

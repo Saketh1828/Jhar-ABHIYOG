@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Search, Filter, Compass, SlidersHorizontal, RefreshCw } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ChallengeCard } from '../components/common/ChallengeCard';
+import { JharkhandMap } from '../components/common/JharkhandMap';
 import { JHARKHAND_DISTRICTS, PROBLEM_CATEGORIES } from '../data/mockData';
 
 export const ExploreProblems = () => {
@@ -40,16 +41,19 @@ export const ExploreProblems = () => {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
       
       {/* Header */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-[#005A36] text-white p-8 rounded-3xl shadow-xl border-b-4 border-amber-400">
+      <div className="bg-gradient-to-r from-[#0F2747] via-[#0F766E] to-slate-900 text-white p-8 rounded-3xl shadow-xl border-b-4 border-amber-400">
         <div className="flex items-center gap-2 text-xs font-bold text-amber-300 uppercase tracking-wider mb-2">
           <Compass className="w-4 h-4" />
           <span>Challenge Discovery Portal</span>
         </div>
         <h1 className="text-3xl sm:text-4xl font-extrabold">Explore Societal Challenges</h1>
-        <p className="text-slate-300 text-sm mt-1 max-w-2xl">
+        <p className="text-slate-200 text-sm mt-1 max-w-2xl">
           Discover problems reported across all 24 Jharkhand districts. Filter by category, priority, or region to propose solutions or offer industry support.
         </p>
       </div>
+
+      {/* Interactive Leaflet District Map */}
+      <JharkhandMap problems={problems} />
 
       {/* Search & Filters Controls */}
       <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-4">

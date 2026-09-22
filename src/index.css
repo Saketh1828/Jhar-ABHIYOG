@@ -4,24 +4,34 @@
 
 @layer base {
   body {
-    @apply bg-[#FAF8F5] text-slate-800 antialiased;
+    @apply bg-[#F8FAFC] text-[#0F172A] antialiased font-sans;
   }
 }
 
-/* Custom Jharkhand Tribal Sohrai Art Subtle Border Accents */
+/* Government Civic-Tech Maroon & Blue Palette */
+:root {
+  --color-primary: #7F1D1D;      /* Primary Maroon */
+  --color-primary-dark: #5B1515; /* Deep Maroon */
+  --color-secondary: #1D4ED8;    /* Tech Blue */
+  --color-secondary-dark: #1E3A8A;
+  --color-accent: #F59E0B;       /* Amber */
+  --color-light-bg: #F8FAFC;
+  --color-surface: #FFFFFF;
+}
+
 .jharkhand-border-accent {
-  border-top: 4px solid #005A36;
-  border-image: linear-gradient(to right, #005A36, #D99B00, #B84A17) 1;
+  border-top: 4px solid #7F1D1D;
+  border-image: linear-gradient(to right, #7F1D1D, #1D4ED8, #F59E0B) 1;
 }
 
 .jharkhand-gradient {
-  background: linear-gradient(135deg, #005A36 0%, #003D24 60%, #1A2E40 100%);
+  background: linear-gradient(135deg, #7F1D1D 0%, #1D4ED8 60%, #1E3A8A 100%);
 }
 
 .jharkhand-hero-bg {
-  background-color: #005A36;
-  background-image: radial-gradient(circle at 80% 20%, rgba(217, 155, 0, 0.15) 0%, transparent 40%),
-                    radial-gradient(circle at 20% 80%, rgba(184, 74, 23, 0.15) 0%, transparent 40%);
+  background-color: #7F1D1D;
+  background-image: radial-gradient(circle at 80% 20%, rgba(29, 78, 216, 0.25) 0%, transparent 45%),
+                    radial-gradient(circle at 20% 80%, rgba(245, 158, 11, 0.2) 0%, transparent 45%);
 }
 
 .badge-pulse {

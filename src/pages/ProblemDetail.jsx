@@ -4,7 +4,8 @@ import {
   MapPin, 
   Users, 
   Calendar, 
-  ThumbsUp, 
+  Heart, 
+  Eye, 
   Share2, 
   Sparkles, 
   CheckCircle2, 
@@ -13,47 +14,39 @@ import {
   Building2, 
   GraduationCap, 
   Send,
-  MessageSquare,
-  Bot
+  Bot,
+  Check,
+  Layers
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { PriorityBadge } from '../components/common/PriorityBadge';
 import { ProgressTracker } from '../components/common/ProgressTracker';
 import { Modal } from '../components/common/Modal';
+import { JoinProjectModal } from '../components/common/JoinProjectModal';
+import { OfferMembershipModal } from '../components/common/OfferMembershipModal';
 
 export const ProblemDetail = () => {
   const { id } = useParams();
-  const { problems, supportProblem, proposeSolution, currentUser } = useApp();
+  const { 
+    problems, 
+    likedProblemIds, 
+    toggleLike, 
+    trackedProblemIds, 
+    toggleTrack,
+    proposeSolution, 
+    currentUser 
+  } = useApp();
 
   const problem = problems.find(p => p.id === id) || problems[0];
 
-  const [isSolutionModalOpen, setIsSolutionModalOpen] = useState(false);
+  const isLiked = likedProblemIds.includes(problem.id);
+  const isTracked = trackedProblemIds.includes(problem.id);
+
+  const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
+  const [isOfferModalOpen, setIsOfferModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-
-  const [solutionForm, setSolutionForm] = useState({
-    teamName: currentUser.university ? `${currentUser.name}'s Innovation Cell` : 'BIT Mesra Student Innovation Cell',
-    institution: currentUser.university || 'Birsa Institute of Technology / NIT Jamshedpur',
-    contactEmail: 'solver@jharkhand-solutions.org',
-    description: ''
-  });
-
-  const handleSupport = () => {
-    supportProblem(problem.id);
-  };
-
-  const handleSolutionSubmit = (e) => {
-    e.preventDefault();
-    if (!solutionForm.description.trim()) {
-      alert("Please enter details of your proposed solution.");
-      return;
-    }
-
-    proposeSolution(problem.id, solutionForm);
-    setIsSolutionModalOpen(false);
-    alert("Solution proposal submitted successfully! The government officer and reporter have been notified.");
-  };
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(window.location.href);
@@ -125,45 +118,121 @@ export const ProblemDetail = () => {
           <div>
             <span className="text-slate-400 font-bold block uppercase text-[10px]">Target Response SLA</span>
             <span className="font-extrabold text-[#005A36] block mt-0.5">
-              {problem.targetResponse.replace('Target attention: ', '')}
+              {problem.targetResponse ? problem.targetResponse.replace('Target attention: ', '') : '2 Days Target'}
             </span>
           </div>
         </div>
 
-        {/* Action Buttons Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
+        {/* Action Buttons Bar: Support + Track + Join + Offer + Share */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
           
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Support / Like Button (Section 23) */}
             <button
-              onClick={handleSupport}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-extrabold text-slate-800 bg-amber-50 border border-amber-300 hover:bg-amber-100 transition-colors shadow-sm"
+              onClick={() => toggleLike(problem.id)}
+              className={`inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all border ${
+                isLiked 
+                  ? 'bg-rose-50 text-rose-700 border-rose-300 shadow-sm' 
+                  : 'bg-slate-100 hover:bg-rose-50 text-slate-700 border-slate-200'
+              }`}
             >
-              <ThumbsUp className="w-4 h-4 text-amber-600" />
-              <span>Support This Problem ({problem.supportersCount})</span>
+              <Heart className={`w-4 h-4 ${isLiked ? 'fill-rose-600 text-rose-600 animate-pulse' : 'text-slate-500'}`} />
+              <span>{isLiked ? '♥ Supported' : '♡ Support Problem'} ({problem.supportersCount})</span>
+            </button>
+
+            {/* Track Problem Button (Section 24) */}
+            <button
+              onClick={() => toggleTrack(problem.id)}
+              className={`inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all border ${
+                isTracked
+                  ? 'bg-indigo-50 text-indigo-800 border-indigo-300'
+                  : 'bg-slate-100 hover:bg-indigo-50 text-slate-700 border-slate-200'
+              }`}
+            >
+              {isTracked ? <Check className="w-4 h-4 text-indigo-700" /> : <Eye className="w-4 h-4 text-indigo-600" />}
+              <span>{isTracked ? '✓ Tracking' : '👁 Track Problem'}</span>
             </button>
 
             <button
               onClick={() => setIsShareModalOpen(true)}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors"
             >
-              <Share2 className="w-4 h-4" />
+              <Share2 className="w-4 h-4 text-slate-500" />
               <span>Share</span>
             </button>
           </div>
 
-          <button
-            onClick={() => setIsSolutionModalOpen(true)}
-            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-extrabold text-sm text-white bg-gradient-to-r from-[#005A36] to-emerald-700 hover:from-emerald-800 hover:to-[#005A36] shadow-lg transition-all ring-2 ring-emerald-400"
-          >
-            <Sparkles className="w-4 h-4 text-amber-400" />
-            <span>PROPOSE A SOLUTION</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsOfferModalOpen(true)}
+              className="px-4 py-2.5 rounded-xl font-bold text-xs text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 shadow-sm"
+            >
+              Offer Membership
+            </button>
+
+            <button
+              onClick={() => setIsJoinModalOpen(true)}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-extrabold text-xs text-white bg-gradient-to-r from-[#005A36] to-emerald-700 hover:from-emerald-800 hover:to-[#005A36] shadow-md transition-all ring-2 ring-emerald-400"
+            >
+              <Sparkles className="w-4 h-4 text-amber-400" />
+              <span>JOIN PROJECT</span>
+            </button>
+          </div>
 
         </div>
 
       </div>
 
-      {/* Photos Gallery */}
+      {/* Receiver Recommendation Perspective (Section 20, 21, 22) */}
+      <div className="bg-gradient-to-r from-indigo-950 via-slate-900 to-[#003D24] text-white rounded-3xl p-6 sm:p-8 shadow-xl border-2 border-indigo-400 space-y-4">
+        <div className="flex items-center justify-between border-b border-indigo-800 pb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold">
+              <Bot className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-extrabold text-sm uppercase text-amber-400 tracking-wide">
+                RECEIVER PERSPECTIVE & AI RECOMMENDATION
+              </h3>
+              <p className="text-[11px] text-indigo-200">System identification of responsible receiver</p>
+            </div>
+          </div>
+          <span className="bg-indigo-900 text-indigo-200 text-xs font-bold px-3 py-1 rounded-full border border-indigo-700">
+            Receiver Type: {problem.receiverType || "Government Department"}
+          </span>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <span className="text-[11px] text-slate-400 font-bold block uppercase">Recommended Official Receiver</span>
+            <p className="text-xl font-black text-white mt-0.5">
+              {problem.recommendedReceiver || problem.assignedDepartment || "Department of Drinking Water & Sanitation (Dumka Division)"}
+            </p>
+          </div>
+
+          <div className="p-3.5 bg-slate-800/80 rounded-xl border border-slate-700 text-xs text-slate-200 leading-relaxed">
+            <strong className="text-amber-300 block mb-1">Why this receiver?</strong>
+            "{problem.whyReceiver || `Based on the problem category (${problem.category}) and location in ${problem.district}, this department is officially responsible for ground infrastructure and public maintenance.`}"
+          </div>
+        </div>
+
+        {/* 6-Stage Assignment Flow (Section 22) */}
+        <div className="pt-2">
+          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-2">
+            Assignment Workflow Flow
+          </span>
+          <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 text-center text-[10px] font-bold">
+            <div className="p-2 bg-slate-800 rounded-lg text-emerald-400 border border-slate-700">1. Citizen Report</div>
+            <div className="p-2 bg-slate-800 rounded-lg text-amber-400 border border-slate-700">2. AI Analysis</div>
+            <div className="p-2 bg-slate-800 rounded-lg text-indigo-400 border border-slate-700">3. Govt Validation</div>
+            <div className="p-2 bg-slate-800 rounded-lg text-purple-400 border border-slate-700">4. Receiver Assigned</div>
+            <div className="p-2 bg-slate-800 rounded-lg text-rose-400 border border-slate-700">5. University Collab</div>
+            <div className="p-2 bg-slate-800 rounded-lg text-emerald-300 border border-slate-700">6. Ground Resolution</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Ground Photos */}
       {problem.photos && problem.photos.length > 0 && (
         <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-3">
           <h3 className="text-sm font-bold text-slate-900">Uploaded Ground Photos ({problem.photos.length})</h3>
@@ -194,7 +263,7 @@ export const ProblemDetail = () => {
           
           <div className="flex items-center gap-2">
             <span className="bg-emerald-100 text-[#005A36] px-2.5 py-1 rounded font-bold text-[11px]">
-              Verified Citizen
+              Verified Identity
             </span>
             {problem.aiConfidence && (
               <span className="bg-amber-100 text-amber-900 px-2.5 py-1 rounded font-bold text-[11px] border border-amber-300 flex items-center gap-1">
@@ -212,129 +281,20 @@ export const ProblemDetail = () => {
         <ProgressTracker currentStatus={problem.status} history={problem.history} />
       </div>
 
-      {/* Special "Looking for Solutions" Collaboration Section */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-[#1A2E40] text-white rounded-3xl p-8 shadow-xl border-2 border-amber-400 space-y-6">
-        
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black">
-            <Sparkles className="w-7 h-7" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-black text-white">Looking for Collaborative Solutions</h2>
-            <p className="text-xs text-amber-300">
-              This issue is not just a complaint—it is an active societal challenge open for academic research & corporate CSR partnership.
-            </p>
-          </div>
-        </div>
+      {/* Modals */}
+      <JoinProjectModal
+        isOpen={isJoinModalOpen}
+        onClose={() => setIsJoinModalOpen(false)}
+        project={problem}
+      />
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-          
-          <div className="p-4 bg-slate-800/80 rounded-2xl border border-slate-700 space-y-2">
-            <div className="flex items-center gap-2 text-indigo-400 font-bold text-sm">
-              <GraduationCap className="w-5 h-5" />
-              <span>For Universities & Students</span>
-            </div>
-            <p className="text-xs text-slate-300">
-              Adopt this challenge for your final year project or SIH innovation cell prototype.
-            </p>
-            <button
-              onClick={() => setIsSolutionModalOpen(true)}
-              className="text-xs font-bold text-indigo-300 hover:underline inline-flex items-center gap-1 pt-1"
-            >
-              Submit Technical Solution Proposal →
-            </button>
-          </div>
+      <OfferMembershipModal
+        isOpen={isOfferModalOpen}
+        onClose={() => setIsOfferModalOpen(false)}
+        targetUser={{ name: problem.reportedBy, email: problem.reporterEmail }}
+        challenge={problem}
+      />
 
-          <div className="p-4 bg-slate-800/80 rounded-2xl border border-slate-700 space-y-2">
-            <div className="flex items-center gap-2 text-amber-400 font-bold text-sm">
-              <Building2 className="w-5 h-5" />
-              <span>For Industry & CSR Sponsors</span>
-            </div>
-            <p className="text-xs text-slate-300">
-              Provide equipment, technical mentorship, or hardware sponsorship to accelerate ground resolution.
-            </p>
-            <button
-              onClick={() => setIsSolutionModalOpen(true)}
-              className="text-xs font-bold text-amber-300 hover:underline inline-flex items-center gap-1 pt-1"
-            >
-              Pledge Industry Support →
-            </button>
-          </div>
-
-        </div>
-
-        {problem.solutionProposed && (
-          <div className="p-4 bg-emerald-950/80 rounded-2xl border border-emerald-500 text-xs space-y-2">
-            <div className="flex items-center gap-2 text-emerald-400 font-extrabold text-sm">
-              <CheckCircle2 className="w-5 h-5" />
-              <span>Active Solution Under Implementation</span>
-            </div>
-            <p className="text-emerald-100 font-medium">Assigned Solver: {problem.assignedTeam}</p>
-            <p className="text-emerald-200">{problem.solutionProposed}</p>
-          </div>
-        )}
-
-      </div>
-
-      {/* Propose Solution Modal */}
-      <Modal
-        isOpen={isSolutionModalOpen}
-        onClose={() => setIsSolutionModalOpen(false)}
-        title="Propose Solution / Offer Partnership"
-        maxWidth="max-w-lg"
-      >
-        <form onSubmit={handleSolutionSubmit} className="space-y-4">
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
-              Team / Organization Name
-            </label>
-            <input
-              type="text"
-              required
-              value={solutionForm.teamName}
-              onChange={(e) => setSolutionForm({ ...solutionForm, teamName: e.target.value })}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold focus:outline-none"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
-              Institution / Company
-            </label>
-            <input
-              type="text"
-              required
-              value={solutionForm.institution}
-              onChange={(e) => setSolutionForm({ ...solutionForm, institution: e.target.value })}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold focus:outline-none"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
-              Proposed Technical Blueprint / Support Plan
-            </label>
-            <textarea
-              rows={4}
-              required
-              value={solutionForm.description}
-              onChange={(e) => setSolutionForm({ ...solutionForm, description: e.target.value })}
-              placeholder="Describe your technical prototype approach, estimated cost, and implementation roadmap..."
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs focus:outline-none"
-            />
-          </div>
-
-          <button
-            type="submit"
-            className="w-full py-3 px-4 rounded-xl font-bold text-xs text-white bg-[#005A36] hover:bg-[#003D24] shadow transition-colors flex items-center justify-center gap-2"
-          >
-            <Send className="w-4 h-4" />
-            <span>Submit Solution Proposal</span>
-          </button>
-        </form>
-      </Modal>
-
-      {/* Share Modal */}
       <Modal
         isOpen={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}

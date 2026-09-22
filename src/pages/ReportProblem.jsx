@@ -14,16 +14,27 @@ import {
   ArrowRight,
   Bot,
   RefreshCw,
-  Edit3
+  Edit3,
+  Mic,
+  MicOff,
+  Globe,
+  Layers,
+  Building2,
+  CopyCheck
 } from 'lucide-react';
 import { useApp, calculatePriority } from '../context/AppContext';
 import { JHARKHAND_DISTRICTS, PROBLEM_CATEGORIES } from '../data/mockData';
 import { ImageUploader } from '../components/common/ImageUploader';
+import { VoiceInput } from '../components/common/VoiceInput';
 import { classifyProblemDescription } from '../utils/aiClassifier';
+import { recommendReceiver } from '../utils/aiReceiverEngine';
+import { LANGUAGES, TRANSLATIONS } from '../utils/translations';
+import { api } from '../services/api';
 
 export const ReportProblem = () => {
-  const { addProblem, currentUser } = useApp();
+  const { addProblem, currentUser, currentLanguage } = useApp();
   const navigate = useNavigate();
+  const t = TRANSLATIONS[currentLanguage || 'en'] || TRANSLATIONS.en;
 
   const [formData, setFormData] = useState({
     title: '',
@@ -32,83 +43,144 @@ export const ReportProblem = () => {
     aiConfidence: 0,
     isAiCategoryOverridden: false,
     description: '',
-    affectedPeople: '250',
+    affectedPeople: '180',
     village: currentUser.village || '',
+    landmark: '',
     district: currentUser.district || 'Dumka',
     state: 'Jharkhand',
     severity: 'HIGH',
+    urgency: 'HIGH',
     photos: []
   });
 
-  const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
-  const [hasAnalyzedOnce, setHasAnalyzedOnce] = useState(false);
+  // Voice Speech Recognition State
+  const [voiceLang, setVoiceLang] = useState('hi-IN');
+  const [isRecording, setIsRecording] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(true);
 
-  // Trigger AI Agent classification when description or title changes
-  useEffect(() => {
-    const textToAnalyze = (formData.title + ' ' + formData.description).trim();
-    if (!textToAnalyze || textToAnalyze.length < 5) {
+  // AI Agent Analysis Screen State
+  const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
+  const [aiAnalysisStep, setAiAnalysisStep] = useState(0);
+  const [aiAnalysisResult, setAiAnalysisResult] = useState(null);
+  const [isConfirmedAi, setIsConfirmedAi] = useState(false);
+
+  const aiSteps = [
+    "Understanding description",
+    "Detecting language",
+    "Categorizing problem",
+    "Assessing priority",
+    "Extracting keywords",
+    "Checking similar complaints",
+    "Finding relevant department"
+  ];
+
+  // Speech Recognition Handler (Section 12 & 13)
+  const handleToggleVoice = () => {
+    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+      setSpeechSupported(false);
+      alert("Browser speech recognition is not supported in this browser environment. You can type your description manually.");
+      return;
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = voiceLang;
+
+    if (!isRecording) {
+      setIsRecording(true);
+      recognition.start();
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        setFormData(prev => ({
+          ...prev,
+          description: prev.description ? `${prev.description} ${transcript}` : transcript
+        }));
+        setIsRecording(false);
+      };
+
+      recognition.onerror = () => {
+        setIsRecording(false);
+      };
+
+      recognition.onend = () => {
+        setIsRecording(false);
+      };
+    } else {
+      setIsRecording(false);
+    }
+  };
+
+  // Run AI Agent Processing Animation
+  const handleRunAiAnalysis = () => {
+    if (!formData.title.trim() && !formData.description.trim()) {
+      alert("Please enter a title or description before running AI Analysis.");
       return;
     }
 
     setIsAiAnalyzing(true);
+    setAiAnalysisStep(0);
 
-    const timer = setTimeout(() => {
-      const result = classifyProblemDescription(formData.description, formData.title);
-      
-      setFormData(prev => ({
-        ...prev,
-        aiSuggestedCategory: result.category,
-        aiConfidence: result.confidence,
-        // Only set category automatically if citizen hasn't manually changed it
-        category: prev.isAiCategoryOverridden ? prev.category : result.category
-      }));
-
-      setIsAiAnalyzing(false);
-      setHasAnalyzedOnce(true);
-    }, 650); // Realistic AI analyzing delay simulation
-
-    return () => clearTimeout(timer);
-  }, [formData.title, formData.description]);
-
-  // Dynamic priority calculation for live preview
-  const livePriority = calculatePriority(
-    formData.affectedPeople,
-    formData.severity,
-    formData.category
-  );
-
-  const handleCategoryChange = (e) => {
-    const selected = e.target.value;
-    setFormData(prev => ({
-      ...prev,
-      category: selected,
-      isAiCategoryOverridden: selected !== prev.aiSuggestedCategory
-    }));
+    const stepInterval = setInterval(() => {
+      setAiAnalysisStep(prev => {
+        if (prev >= aiSteps.length - 1) {
+          clearInterval(stepInterval);
+          finishAiAnalysis();
+          return prev;
+        }
+        return prev + 1;
+      });
+    }, 180);
   };
 
-  const handleReanalyzeAI = () => {
-    setIsAiAnalyzing(true);
-    setTimeout(() => {
-      const result = classifyProblemDescription(formData.description, formData.title);
-      setFormData(prev => ({
-        ...prev,
-        category: result.category,
-        aiSuggestedCategory: result.category,
-        aiConfidence: result.confidence,
-        isAiCategoryOverridden: false
-      }));
-      setIsAiAnalyzing(false);
-    }, 600);
+  const finishAiAnalysis = () => {
+    const classification = classifyProblemDescription(formData.description, formData.title);
+    const receiver = recommendReceiver(classification.category, formData.description, formData.district);
+    const priorityCalc = calculatePriority(formData.affectedPeople, formData.severity, classification.category);
+
+    const result = {
+      primaryCategory: classification.category,
+      relatedCategory: classification.category === 'Education' ? 'Water & Sanitation' : 'Public Infrastructure',
+      priority: priorityCalc.priority,
+      priorityScore: priorityCalc.priorityScore,
+      targetResponse: priorityCalc.targetResponse,
+      confidence: classification.confidence,
+      keywords: [formData.category, "Drinking Water", "School", "Infrastructure", formData.district],
+      potentialDuplicates: 2,
+      recommendedReceiver: receiver.recommendedReceiver,
+      receiverType: receiver.receiverType,
+      whyReceiver: receiver.whyReceiver,
+      whyPriority: `Assigned ${priorityCalc.priority} priority because an essential service is affected, ${formData.affectedPeople} citizens are affected, and 2 similar complaints were identified.`
+    };
+
+    setAiAnalysisResult(result);
+    setFormData(prev => ({
+      ...prev,
+      category: prev.isAiCategoryOverridden ? prev.category : classification.category,
+      aiSuggestedCategory: classification.category,
+      aiConfidence: classification.confidence
+    }));
+
+    setIsAiAnalyzing(false);
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!formData.title.trim() || !formData.description.trim()) {
-      alert("Please fill in the problem title and description.");
+    if (!formData.title.trim()) {
+      alert("Please enter a valid problem title.");
       return;
     }
 
-    const createdProblem = addProblem(formData);
+    const trimmedDesc = formData.description ? formData.description.trim() : '';
+    if (trimmedDesc.length < 15) {
+      alert("Please provide a clear problem description of at least 15 characters.");
+      return;
+    }
+
+    addProblem(formData);
     navigate('/confirmation');
   };
 
@@ -116,368 +188,286 @@ export const ReportProblem = () => {
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
       
       {/* Header */}
-      <div className="bg-gradient-to-r from-[#005A36] to-[#003D24] text-white p-6 sm:p-8 rounded-2xl shadow-lg border-2 border-amber-400">
+      <div className="bg-gradient-to-r from-[#005A36] to-[#003D24] text-white p-6 sm:p-8 rounded-3xl shadow-lg border-2 border-amber-400">
         <div className="flex flex-wrap items-center gap-3 mb-2">
-          <span className="bg-amber-500 text-slate-950 font-black text-xs px-2.5 py-1 rounded-full uppercase tracking-wide">
-            Step-by-Step Reporting Form
+          <span className="bg-amber-500 text-slate-950 font-black text-xs px-3 py-1 rounded-full uppercase tracking-wide">
+            SAMASYA NIVARK • Citizen Reporting
           </span>
-          <span className="bg-emerald-800/80 text-emerald-200 text-xs font-bold px-2.5 py-1 rounded-full border border-emerald-400/30 flex items-center gap-1">
-            <Bot className="w-3.5 h-3.5 text-amber-300" /> AI Categorization Enabled
+          <span className="bg-emerald-800/90 text-emerald-200 text-xs font-bold px-3 py-1 rounded-full border border-emerald-400/30 flex items-center gap-1">
+            <Bot className="w-3.5 h-3.5 text-amber-300" /> AI Agent + Voice Supported
           </span>
         </div>
-        <h1 className="text-2xl sm:text-4xl font-extrabold text-white">
-          Report a Societal Problem
+        <h1 className="text-2xl sm:text-4xl font-black text-white">
+          {t.reportProblem || "REPORT A PROBLEM"}
         </h1>
-        <p className="text-emerald-100 text-sm mt-1 max-w-2xl">
-          Help us understand real problems in your community so government officials, university teams, and industry partners can collaborate to solve them.
+        <p className="text-emerald-100 text-xs sm:text-sm mt-1 max-w-2xl">
+          {t.languageNote || "You can describe your problem in your preferred language."}
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      {/* Main Form */}
+      <form onSubmit={handleSubmit} className="bg-white rounded-3xl p-6 sm:p-8 shadow-md border border-slate-200 space-y-6">
         
-        {/* Form Column */}
-        <div className="lg:col-span-8">
-          <form onSubmit={handleSubmit} className="bg-white rounded-2xl p-6 sm:p-8 shadow-md border border-slate-200 space-y-6">
-            
-            {/* Step 1: Problem Title */}
-            <div>
-              <label className="block text-sm font-bold text-slate-900 mb-1">
-                Problem Title <span className="text-red-500">*</span>
-              </label>
-              <p className="text-xs text-slate-500 mb-2">State the main problem clearly in a few words.</p>
-              <input
-                type="text"
-                required
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                placeholder="e.g. Drinking water shortage & broken borewell in Jama village"
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-[#005A36] focus:bg-white focus:outline-none"
-              />
+        {/* Step 1: Problem Title */}
+        <div>
+          <label className="block text-sm font-bold text-slate-900 mb-1">
+            Problem Title <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            required
+            value={formData.title}
+            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+            placeholder="e.g. Government School Drinking Water Shortage & Broken Pump"
+            className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-[#005A36] focus:bg-white focus:outline-none"
+          />
+        </div>
+
+        {/* Step 2: Description & Speech Input */}
+        <div className="space-y-4">
+          <VoiceInput
+            selectedLangCode={currentLanguage || 'hi'}
+            initialTranscript={formData.description}
+            onTranscriptChange={(transcriptText) => {
+              setFormData(prev => ({ ...prev, description: transcriptText }));
+            }}
+          />
+        </div>
+
+        {/* AI Agent Processing & Results Section */}
+        <div className="p-5 bg-gradient-to-br from-emerald-50/80 via-white to-amber-50/50 rounded-2xl border-2 border-emerald-500/80 space-y-4">
+          
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-xl bg-[#005A36] text-amber-400 flex items-center justify-center font-black shadow">
+                <Bot className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-slate-900 uppercase tracking-wide">
+                  AI AGENT ANALYSIS & RECEIVER MATCHING
+                </h3>
+                <p className="text-xs text-slate-500">Autonomous Intent, Priority & Receiver Engine</p>
+              </div>
             </div>
 
-            {/* Description */}
-            <div>
-              <label className="block text-sm font-bold text-slate-900 mb-1">
-                Detailed Description <span className="text-red-500">*</span>
-              </label>
-              <p className="text-xs text-slate-500 mb-2">Explain what is happening in simple language. Our AI Agent will analyze your text to suggest the best problem category.</p>
-              <textarea
-                rows={4}
-                required
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Explain the problem in detail (e.g., broken borewell, unpaved muddy road, clinic power cuts, school roof leak)..."
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-[#005A36] focus:bg-white focus:outline-none"
-              />
-            </div>
+            <button
+              type="button"
+              onClick={handleRunAiAnalysis}
+              className="px-4 py-2 bg-[#005A36] hover:bg-[#003D24] text-white font-extrabold text-xs rounded-xl shadow transition-colors flex items-center gap-1.5"
+            >
+              <Sparkles className="w-4 h-4 text-amber-300" />
+              <span>{isAiAnalyzing ? 'Analyzing...' : 'ANALYZE WITH AI AGENT'}</span>
+            </button>
+          </div>
 
-            {/* AI Categorization Agent Box */}
-            <div className="p-4 bg-gradient-to-br from-emerald-50/80 via-white to-amber-50/50 rounded-2xl border-2 border-emerald-500/60 shadow-sm space-y-3">
-              
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-[#005A36] text-amber-400 flex items-center justify-center shadow-sm">
-                    <Bot className="w-5 h-5" />
+          {/* Processing Animation */}
+          {isAiAnalyzing && (
+            <div className="p-4 bg-slate-900 text-white rounded-xl space-y-2 border border-slate-700 animate-fadeIn">
+              <div className="flex items-center justify-between text-xs text-amber-300 font-bold border-b border-slate-800 pb-2">
+                <span className="flex items-center gap-2">
+                  <RefreshCw className="w-4 h-4 animate-spin text-amber-400" />
+                  <span>AI Agent is analysing your problem...</span>
+                </span>
+                <span>Step {aiAnalysisStep + 1} of {aiSteps.length}</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1 text-xs">
+                {aiSteps.map((stepName, idx) => (
+                  <div key={idx} className={`flex items-center gap-2 ${idx <= aiAnalysisStep ? 'text-emerald-400 font-bold' : 'text-slate-600'}`}>
+                    <span>{idx <= aiAnalysisStep ? '✓' : '○'}</span>
+                    <span>{stepName}</span>
                   </div>
-                  <div>
-                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                      AI Categorization Agent
-                    </h3>
-                    <p className="text-[11px] text-slate-500">Autonomous intent & category analysis</p>
-                  </div>
-                </div>
-
-                {isAiAnalyzing ? (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-100 text-amber-900 text-xs font-extrabold rounded-full border border-amber-300 animate-pulse">
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-700" />
-                    <span>AI Agent Analyzing...</span>
-                  </span>
-                ) : hasAnalyzedOnce ? (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-100 text-[#005A36] text-xs font-extrabold rounded-full border border-emerald-300">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                    <span>Analysis Complete</span>
-                  </span>
-                ) : null}
-              </div>
-
-              {/* AI Agent Status Display */}
-              {isAiAnalyzing ? (
-                <div className="p-3 bg-white/80 rounded-xl border border-amber-200 text-xs text-amber-900 flex items-center gap-3">
-                  <div className="w-4 h-4 rounded-full border-2 border-amber-600 border-t-transparent animate-spin shrink-0" />
-                  <span>Analyzing key terms & public impact intent...</span>
-                </div>
-              ) : hasAnalyzedOnce ? (
-                <div className="space-y-2 pt-1">
-                  
-                  <div className="p-3 bg-white rounded-xl border border-emerald-200 shadow-sm flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <span className="text-[10px] text-slate-400 font-bold uppercase block">AI Suggested Category</span>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-sm font-extrabold text-[#005A36]">
-                          {formData.aiSuggestedCategory}
-                        </span>
-                        <span className="bg-emerald-600 text-white font-extrabold text-[10px] px-2 py-0.5 rounded-md">
-                          {formData.aiConfidence}% Confidence
-                        </span>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={handleReanalyzeAI}
-                      className="text-[11px] font-bold text-[#005A36] hover:underline flex items-center gap-1"
-                    >
-                      <RefreshCw className="w-3 h-3" /> Re-analyze
-                    </button>
-                  </div>
-
-                  {formData.isAiCategoryOverridden && (
-                    <p className="text-[11px] text-amber-800 font-bold bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200 flex items-center gap-1">
-                      <Edit3 className="w-3.5 h-3.5 text-amber-600" />
-                      Note: You have manually selected '{formData.category}'. The system will use your chosen category.
-                    </p>
-                  )}
-
-                </div>
-              ) : (
-                <p className="text-xs text-slate-500 italic">
-                  Type a title and problem description above to see AI suggested category and confidence score.
-                </p>
-              )}
-
-              {/* Category Select Dropdown */}
-              <div className="pt-2">
-                <label className="block text-xs font-bold text-slate-800 mb-1">
-                  Selected Category (Confirm or Change) <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={formData.category}
-                  onChange={handleCategoryChange}
-                  className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-extrabold text-slate-900 focus:ring-2 focus:ring-[#005A36] focus:outline-none shadow-sm"
-                >
-                  {PROBLEM_CATEGORIES.map(cat => (
-                    <option key={cat} value={cat}>
-                      {cat} {cat === formData.aiSuggestedCategory ? '★ (AI Suggested)' : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-            </div>
-
-            {/* Affected People */}
-            <div>
-              <label className="block text-sm font-bold text-slate-900 mb-1">
-                Approximately How Many People Are Affected? <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <Users className="w-5 h-5 text-slate-400 absolute left-3.5 top-3.5" />
-                <input
-                  type="number"
-                  min="1"
-                  required
-                  value={formData.affectedPeople}
-                  onChange={(e) => setFormData({ ...formData, affectedPeople: e.target.value })}
-                  placeholder="e.g. 350"
-                  className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-[#005A36] focus:outline-none"
-                />
-              </div>
-            </div>
-
-            {/* Location Section */}
-            <div className="p-4 bg-[#FAF8F5] rounded-xl border border-slate-200 space-y-4">
-              <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-[#B84A17]" />
-                <span>Problem Location Details</span>
-              </h3>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Village / Town</label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.village}
-                    onChange={(e) => setFormData({ ...formData, village: e.target.value })}
-                    placeholder="e.g. Jama"
-                    className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">District</label>
-                  <select
-                    value={formData.district}
-                    onChange={(e) => setFormData({ ...formData, district: e.target.value })}
-                    className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold focus:outline-none"
-                  >
-                    {JHARKHAND_DISTRICTS.map(d => (
-                      <option key={d} value={d}>{d}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">State</label>
-                  <input
-                    type="text"
-                    disabled
-                    value={formData.state}
-                    className="w-full px-3 py-2.5 bg-slate-100 border border-slate-300 rounded-lg text-xs font-bold text-slate-600"
-                  />
-                </div>
-              </div>
-
-              {/* Map Preview Mock */}
-              <div className="bg-slate-200 rounded-xl h-32 flex items-center justify-center relative overflow-hidden border border-slate-300">
-                <div className="absolute inset-0 opacity-40 bg-[radial-gradient(#005a36_1px,transparent_1px)] [background-size:12px_12px]" />
-                <div className="relative text-center p-2 bg-white/90 backdrop-blur-md rounded-lg shadow border border-slate-300">
-                  <MapPin className="w-6 h-6 text-[#B84A17] mx-auto animate-bounce" />
-                  <span className="text-xs font-bold text-slate-900 block">
-                    Location Pinned: {formData.village || 'Village'}, {formData.district}, Jharkhand
-                  </span>
-                  <span className="text-[10px] text-slate-500 font-mono">GPS Coordinates Verified</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Photo Uploader */}
-            <ImageUploader
-              photos={formData.photos}
-              onPhotosChange={(photos) => setFormData({ ...formData, photos })}
-              maxPhotos={4}
-            />
-
-            {/* Difficulty / Severity Selection */}
-            <div className="space-y-3">
-              <label className="block text-sm font-bold text-slate-900">
-                Problem Seriousness / Severity Level <span className="text-red-500">*</span>
-              </label>
-              <p className="text-xs text-slate-500">Select how serious this issue is for the community.</p>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {[
-                  {
-                    id: "LOW",
-                    title: "LOW SEVERITY",
-                    desc: "Minor inconvenience • Can be addressed later",
-                    bg: "bg-emerald-50 border-emerald-300 text-emerald-900"
-                  },
-                  {
-                    id: "MEDIUM",
-                    title: "MEDIUM SEVERITY",
-                    desc: "Significant problem • Requires attention",
-                    bg: "bg-amber-50 border-amber-300 text-amber-900"
-                  },
-                  {
-                    id: "HIGH",
-                    title: "HIGH SEVERITY",
-                    desc: "Serious problem • Many affected • Urgent attention",
-                    bg: "bg-orange-50 border-orange-400 text-orange-950 font-bold"
-                  },
-                  {
-                    id: "CRITICAL",
-                    title: "CRITICAL SEVERITY",
-                    desc: "Immediate danger or severe impact • Urgent govt response",
-                    bg: "bg-red-50 border-red-500 text-red-950 font-extrabold"
-                  }
-                ].map((sev) => (
-                  <button
-                    key={sev.id}
-                    type="button"
-                    onClick={() => setFormData({ ...formData, severity: sev.id })}
-                    className={`p-3.5 text-left rounded-xl border-2 transition-all flex flex-col justify-between ${
-                      formData.severity === sev.id 
-                        ? `${sev.bg} ring-2 ring-[#005A36] shadow-sm` 
-                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-black uppercase tracking-wider">{sev.title}</span>
-                      {formData.severity === sev.id && (
-                        <CheckCircle2 className="w-4 h-4 text-[#005A36]" />
-                      )}
-                    </div>
-                    <span className="text-[11px] mt-1 opacity-90 block">{sev.desc}</span>
-                  </button>
                 ))}
               </div>
             </div>
+          )}
 
-            {/* Submit Button */}
-            <div className="pt-4 border-t border-slate-200">
-              <button
-                type="submit"
-                className="w-full py-4 px-6 rounded-xl font-black text-base text-white bg-gradient-to-r from-[#B84A17] to-amber-600 hover:from-amber-700 hover:to-[#B84A17] shadow-xl hover:shadow-2xl transition-all duration-200 ring-2 ring-amber-400 flex items-center justify-center gap-3"
-              >
-                <PlusCircle className="w-6 h-6 text-white" />
-                <span>SUBMIT REPORT ({formData.category})</span>
-              </button>
+          {/* AI Analysis Output Card (Section 15, 16, 17, 18, 20) */}
+          {aiAnalysisResult && !isAiAnalyzing && (
+            <div className="p-5 bg-white rounded-xl border-2 border-emerald-400 shadow-md space-y-4 animate-fadeIn">
+              
+              <div className="flex items-center justify-between border-b pb-3">
+                <div className="flex items-center gap-2">
+                  <span className="bg-emerald-100 text-[#005A36] text-xs font-black px-3 py-1 rounded-full">
+                    AI ANALYSIS COMPLETE ({aiAnalysisResult.confidence}% Confidence)
+                  </span>
+                </div>
+                <span className="text-xs font-mono font-bold text-amber-800 bg-amber-50 px-2 py-1 rounded border border-amber-200">
+                  {aiAnalysisResult.priority} PRIORITY
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                
+                <div className="p-3 bg-slate-50 rounded-lg border">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Primary Category</span>
+                  <span className="font-extrabold text-[#005A36] text-sm block mt-0.5">{aiAnalysisResult.primaryCategory}</span>
+                  <span className="text-[11px] text-slate-500 block mt-1">Related: {aiAnalysisResult.relatedCategory}</span>
+                </div>
+
+                <div className="p-3 bg-slate-50 rounded-lg border">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Potential Duplicates</span>
+                  <span className="font-extrabold text-amber-700 text-sm block mt-0.5 flex items-center gap-1">
+                    <CopyCheck className="w-4 h-4 text-amber-600" />
+                    {aiAnalysisResult.potentialDuplicates} Similar Complaints Found
+                  </span>
+                  <span className="text-[11px] text-slate-500 block mt-1">In Jama Block, Dumka</span>
+                </div>
+
+              </div>
+
+              {/* Recommended Receiver (Section 20) */}
+              <div className="p-4 bg-indigo-50/80 rounded-xl border border-indigo-200 space-y-1.5 text-xs">
+                <div className="flex justify-between items-center">
+                  <span className="font-extrabold text-indigo-950 uppercase text-[10px]">Recommended Receiver</span>
+                  <span className="bg-indigo-200 text-indigo-900 font-bold px-2 py-0.5 rounded text-[10px]">
+                    {aiAnalysisResult.receiverType}
+                  </span>
+                </div>
+                <p className="font-black text-indigo-900 text-sm">{aiAnalysisResult.recommendedReceiver}</p>
+                <p className="text-indigo-800 text-[11px] leading-relaxed pt-1 border-t border-indigo-200/60">
+                  <strong>Why this receiver?</strong> "{aiAnalysisResult.whyReceiver}"
+                </p>
+              </div>
+
+              {/* Explainable Priority Reason (Section 17) */}
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs">
+                <span className="font-extrabold text-amber-950 block text-[10px] uppercase">Why was this priority assigned?</span>
+                <p className="text-amber-900 text-[11px] mt-0.5 font-medium">{aiAnalysisResult.whyPriority}</p>
+              </div>
+
             </div>
+          )}
 
-          </form>
+          {/* Category Dropdown & Manual Override */}
+          <div className="pt-2">
+            <label className="block text-xs font-bold text-slate-800 mb-1">
+              Category (Confirm or Select) <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={formData.category}
+              onChange={(e) => setFormData({ ...formData, category: e.target.value, isAiCategoryOverridden: true })}
+              className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-extrabold text-slate-900 focus:ring-2 focus:ring-[#005A36] shadow-sm"
+            >
+              {PROBLEM_CATEGORIES.map(cat => (
+                <option key={cat} value={cat}>
+                  {cat} {cat === formData.aiSuggestedCategory ? '★ (AI Suggested)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
         </div>
 
-        {/* Priority Calculation Live Preview Panel */}
-        <div className="lg:col-span-4 space-y-6">
-          <div className="bg-slate-900 text-white rounded-2xl p-6 shadow-xl border-2 border-amber-400 sticky top-24">
-            
-            <div className="flex items-center gap-2 text-amber-400 mb-4 pb-3 border-b border-slate-800">
-              <Sparkles className="w-5 h-5" />
-              <h3 className="font-extrabold text-sm uppercase tracking-wide">Automated Priority Calculator</h3>
-            </div>
+        {/* Step 3: Affected People & Severity/Urgency */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-900 mb-1">
+              People Affected <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="number"
+              min="1"
+              required
+              value={formData.affectedPeople}
+              onChange={(e) => setFormData({ ...formData, affectedPeople: e.target.value })}
+              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold"
+            />
+          </div>
 
-            <p className="text-xs text-slate-300 leading-relaxed mb-6">
-              Our system automatically calculates priority score based on affected population, severity, and category urgency.
-            </p>
+          <div>
+            <label className="block text-xs font-bold text-slate-900 mb-1">Severity Level</label>
+            <select
+              value={formData.severity}
+              onChange={(e) => setFormData({ ...formData, severity: e.target.value })}
+              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold"
+            >
+              <option value="LOW">Low - Minor inconvenience</option>
+              <option value="MEDIUM">Medium - Significant problem</option>
+              <option value="HIGH">High - Serious problem</option>
+              <option value="CRITICAL">Critical - Severe danger</option>
+            </select>
+          </div>
 
-            <div className="space-y-4">
-              
-              <div className="p-4 bg-slate-800 rounded-xl border border-slate-700">
-                <span className="text-[11px] text-slate-400 uppercase tracking-wider block font-semibold">Calculated Priority Level</span>
-                <span className={`text-xl font-black block mt-1 uppercase ${
-                  livePriority.priority === 'CRITICAL' ? 'text-red-400' :
-                  livePriority.priority === 'HIGH' ? 'text-amber-400' :
-                  livePriority.priority === 'MEDIUM' ? 'text-amber-200' : 'text-emerald-300'
-                }`}>
-                  {livePriority.priority} PRIORITY
-                </span>
-                <span className="text-[11px] text-slate-400 mt-1 block">
-                  Priority Score: <strong>{livePriority.priorityScore} / 120</strong>
-                </span>
-              </div>
-
-              <div className="p-4 bg-[#005A36] rounded-xl border border-emerald-400/40 space-y-1">
-                <span className="text-[11px] text-emerald-200 font-bold uppercase tracking-wider block">Target Attention SLA</span>
-                <p className="text-sm font-extrabold text-white">
-                  {livePriority.targetResponse}
-                </p>
-                <p className="text-[10px] text-emerald-200 pt-1">
-                  *Platform-defined response target for district officers.
-                </p>
-              </div>
-
-              <div className="p-3 bg-slate-800/80 rounded-lg text-[11px] text-slate-300 space-y-1.5 border border-slate-700">
-                <div className="flex justify-between">
-                  <span>Selected Category:</span>
-                  <span className="font-bold text-amber-300 truncate max-w-[140px]">{formData.category}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>AI Confidence:</span>
-                  <span className="font-bold text-emerald-400">{formData.aiConfidence ? `${formData.aiConfidence}%` : 'N/A'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Category Urgency:</span>
-                  <span className="font-bold text-emerald-400">+15 pts</span>
-                </div>
-              </div>
-
-            </div>
-
+          <div>
+            <label className="block text-xs font-bold text-slate-900 mb-1">Urgency Level</label>
+            <select
+              value={formData.urgency}
+              onChange={(e) => setFormData({ ...formData, urgency: e.target.value })}
+              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold"
+            >
+              <option value="Low">Low</option>
+              <option value="Medium">Medium</option>
+              <option value="High">High</option>
+              <option value="Immediate">Immediate</option>
+            </select>
           </div>
         </div>
 
-      </div>
+        {/* Step 4: Location Section */}
+        <div className="p-4 bg-[#FAF8F5] rounded-xl border border-slate-200 space-y-3">
+          <h3 className="text-xs font-extrabold text-slate-900 uppercase flex items-center gap-1.5">
+            <MapPin className="w-4 h-4 text-[#B84A17]" />
+            <span>Problem Location Details</span>
+          </h3>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700 mb-1">Village / Town / Ward</label>
+              <input
+                type="text"
+                required
+                value={formData.village}
+                onChange={(e) => setFormData({ ...formData, village: e.target.value })}
+                placeholder="e.g. Jama Village"
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700 mb-1">District</label>
+              <select
+                value={formData.district}
+                onChange={(e) => setFormData({ ...formData, district: e.target.value })}
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold"
+              >
+                {JHARKHAND_DISTRICTS.map(d => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700 mb-1">Street / Landmark</label>
+              <input
+                type="text"
+                value={formData.landmark}
+                onChange={(e) => setFormData({ ...formData, landmark: e.target.value })}
+                placeholder="e.g. Near Tribal High School"
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Step 5: Photo Upload (Max 4 Photos) */}
+        <ImageUploader
+          photos={formData.photos}
+          onPhotosChange={(photos) => setFormData({ ...formData, photos })}
+          maxPhotos={4}
+        />
+
+        {/* Submit Buttons */}
+        <div className="pt-4 border-t flex items-center justify-between gap-4">
+          <button
+            type="submit"
+            className="w-full py-4 px-6 rounded-xl font-black text-base text-white bg-gradient-to-r from-[#B84A17] to-amber-600 hover:from-amber-700 hover:to-[#B84A17] shadow-xl hover:shadow-2xl transition-all duration-200 ring-2 ring-amber-400 flex items-center justify-center gap-3"
+          >
+            <PlusCircle className="w-6 h-6 text-white" />
+            <span>CONFIRM & SUBMIT REPORT</span>
+          </button>
+        </div>
+
+      </form>
 
     </div>
   );
