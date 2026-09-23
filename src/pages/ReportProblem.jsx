@@ -167,8 +167,13 @@ export const ReportProblem = () => {
     setIsAiAnalyzing(false);
   };
 
-  const handleSubmit = (e) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setSubmitError('');
+
     if (!formData.title.trim()) {
       alert("Please enter a valid problem title.");
       return;
@@ -180,8 +185,48 @@ export const ReportProblem = () => {
       return;
     }
 
-    addProblem(formData);
-    navigate('/confirmation');
+    setIsSubmitting(true);
+
+    try {
+      // Build payload with all fields the backend Problem model expects
+      const payload = {
+        title: formData.title.trim(),
+        description: trimmedDesc,
+        category: formData.category,
+        subcategory: formData.category,
+        isAiCategoryOverridden: formData.isAiCategoryOverridden || false,
+        district: formData.district || 'Dumka',
+        village: formData.village || '',
+        state: formData.state || 'Jharkhand',
+        affectedPeople: parseInt(formData.affectedPeople) || 1,
+        severity: formData.severity || 'MEDIUM',
+        urgency: formData.urgency || 'MEDIUM',
+        reportedBy: currentUser.name || 'Anonymous Citizen',
+        reporterMobile: currentUser.mobile || '',
+        reporterEmail: currentUser.email || '',
+        photos: formData.photos && formData.photos.length > 0 ? formData.photos : []
+      };
+
+      // Call backend — this creates the Problem document in MongoDB
+      const res = await api.problems.create(payload);
+
+      // On success, also update local React state so the UI reflects the new problem
+      // Use the backend-returned data to stay in sync with MongoDB
+      if (res.data) {
+        addProblem({
+          ...formData,
+          _backendId: res.data.id  // tag so addProblem can use the real ID if needed
+        });
+      } else {
+        addProblem(formData);
+      }
+
+      navigate('/confirmation');
+    } catch (err) {
+      setSubmitError(err.message || 'Failed to submit problem. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -456,14 +501,22 @@ export const ReportProblem = () => {
           maxPhotos={4}
         />
 
+        {/* Submit Error Display */}
+        {submitError && (
+          <div className="bg-red-50 text-red-700 text-sm p-3 rounded-xl border border-red-200 font-semibold">
+            {submitError}
+          </div>
+        )}
+
         {/* Submit Buttons */}
         <div className="pt-4 border-t flex items-center justify-between gap-4">
           <button
             type="submit"
-            className="w-full py-4 px-6 rounded-xl font-black text-base text-white bg-gradient-to-r from-[#B84A17] to-amber-600 hover:from-amber-700 hover:to-[#B84A17] shadow-xl hover:shadow-2xl transition-all duration-200 ring-2 ring-amber-400 flex items-center justify-center gap-3"
+            disabled={isSubmitting}
+            className={`w-full py-4 px-6 rounded-xl font-black text-base text-white shadow-xl transition-all duration-200 ring-2 ring-amber-400 flex items-center justify-center gap-3 ${isSubmitting ? 'bg-slate-400 cursor-not-allowed hover:shadow-xl' : 'bg-gradient-to-r from-[#B84A17] to-amber-600 hover:from-amber-700 hover:to-[#B84A17] hover:shadow-2xl'}`}
           >
             <PlusCircle className="w-6 h-6 text-white" />
-            <span>CONFIRM & SUBMIT REPORT</span>
+            <span>{isSubmitting ? 'SUBMITTING...' : 'CONFIRM & SUBMIT REPORT'}</span>
           </button>
         </div>
 
