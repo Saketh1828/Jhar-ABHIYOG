@@ -4,6 +4,7 @@ import { Shield, Phone, Lock, User, MapPin, ArrowRight, ShieldCheck } from 'luci
 import { useApp } from '../context/AppContext';
 import { JHARKHAND_DISTRICTS } from '../data/mockData';
 import { MockAadhaarModal } from '../components/common/MockAadhaarModal';
+import { api } from '../services/api';
 
 export const Register = () => {
   const { loginUser } = useApp();
@@ -23,9 +24,12 @@ export const Register = () => {
   const [error, setError] = useState('');
   const [isAadhaarVerified, setIsAadhaarVerified] = useState(false);
   const [isAadhaarModalOpen, setIsAadhaarModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
+
     if (!formData.name) {
       setError('Please enter your full name.');
       return;
@@ -42,18 +46,56 @@ export const Register = () => {
       setError('Please enter a valid Gmail address (e.g. yourname@gmail.com).');
       return;
     }
+    if (!formData.password || formData.password.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
 
-    loginUser({
-      name: formData.name,
-      mobile: `+91 ${formData.mobile}`,
-      email: formData.email.trim().toLowerCase(),
-      role: formData.role,
-      district: formData.district,
-      village: formData.village,
-      isAadhaarVerified: isAadhaarVerified
-    });
+    // Map frontend role labels to backend User model enum values
+    const roleMap = {
+      citizen: 'CITIZEN',
+      student: 'STUDENT',
+      university: 'FACULTY',
+      industry: 'INDUSTRY_ADMIN',
+      government: 'GOVERNMENT_ADMIN',
+      ngo: 'NGO'
+    };
 
-    navigate('/');
+    setIsSubmitting(true);
+
+    try {
+      const res = await api.auth.register({
+        name: formData.name,
+        email: formData.email.trim().toLowerCase(),
+        password: formData.password,
+        mobile: formData.mobile,
+        role: roleMap[formData.role] || 'CITIZEN',
+        district: formData.district,
+        village: formData.village
+      });
+
+      // Store JWT token returned by backend
+      if (res.token) {
+        localStorage.setItem('sih_auth_token', res.token);
+      }
+
+      // Set local session from backend-confirmed user data
+      loginUser({
+        name: res.user?.name || formData.name,
+        mobile: `+91 ${formData.mobile}`,
+        email: res.user?.email || formData.email.trim().toLowerCase(),
+        role: formData.role,
+        district: res.user?.district || formData.district,
+        village: formData.village,
+        isAadhaarVerified: isAadhaarVerified
+      });
+
+      navigate('/');
+    } catch (err) {
+      setError(err.message || 'Registration failed. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -217,9 +259,10 @@ export const Register = () => {
 
           <button
             type="submit"
-            className="w-full py-3.5 px-4 rounded-xl font-black text-sm text-white bg-[#005A36] hover:bg-[#003D24] shadow-md transition-all flex items-center justify-center gap-2 mt-4"
+            disabled={isSubmitting}
+            className={`w-full py-3.5 px-4 rounded-xl font-black text-sm text-white shadow-md transition-all flex items-center justify-center gap-2 mt-4 ${isSubmitting ? 'bg-slate-400 cursor-not-allowed' : 'bg-[#005A36] hover:bg-[#003D24]'}`}
           >
-            <span>CREATE ACCOUNT</span>
+            <span>{isSubmitting ? 'CREATING ACCOUNT...' : 'CREATE ACCOUNT'}</span>
             <ArrowRight className="w-4 h-4 text-amber-400" />
           </button>
         </form>

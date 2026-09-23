@@ -4,7 +4,7 @@ import { User } from '../models/User.js';
 
 export const register = async (req, res, next) => {
   try {
-    const { name, email, password, role, district, village, organization } = req.body;
+    const { name, email, password, role, district, village, organization, mobile } = req.body;
 
     const existing = await User.findOne({ email });
     if (existing) {
@@ -20,6 +20,7 @@ export const register = async (req, res, next) => {
       name,
       email,
       password: hashedPassword,
+      mobile: mobile || '',
       role: role || 'CITIZEN',
       district: district || 'Ranchi',
       village: village || '',
