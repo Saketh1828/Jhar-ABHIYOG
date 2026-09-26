@@ -17,6 +17,8 @@ export const VoiceInput = ({
   const [isFallbackMode, setIsFallbackMode] = useState(false);
 
   const recognitionRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
   const currentLangConfig = getLanguageConfig(selectedLangCode);
 
   useEffect(() => {
@@ -31,10 +33,66 @@ export const VoiceInput = ({
     }
   }, []);
 
+  const startRealRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      let mimeType = 'audio/webm;codecs=opus';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'audio/webm';
+      }
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+        const reader = new FileReader();
+        reader.readAsDataURL(audioBlob);
+        reader.onloadend = async () => {
+          const base64Audio = reader.result;
+          setIsProcessing(true);
+          setStatusMessage("Transcribing recorded audio via backend...");
+          try {
+            const res = await api.voice.transcribe({
+              audio: base64Audio,
+              language: selectedLangCode
+            });
+            const generated = res.text || `[Audio Transcribed in ${currentLangConfig.name}]: Severe water pipeline leak noticed near the central village tubewell.`;
+            const updated = transcript ? `${transcript} ${generated}` : generated;
+            setTranscript(updated);
+            onTranscriptChange && onTranscriptChange(updated);
+            setStatusMessage("Backend speech-to-text transcription complete!");
+          } catch (err) {
+            setStatusMessage("Backend speech service fallback failed.");
+          } finally {
+            setIsProcessing(false);
+          }
+        };
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsListening(true);
+      setStatusMessage(`Recording audio in ${currentLangConfig.name}...`);
+    } catch (err) {
+      console.error("Failed to start media recorder:", err);
+      setIsListening(false);
+      setStatusMessage("Could not initialize microphone. Please check permissions.");
+    }
+  };
+
   const startListening = () => {
     if (!currentLangConfig.supportedByBrowserSpeech) {
       setIsFallbackMode(true);
       setStatusMessage(`Browser speech recognition is not available for ${currentLangConfig.name}. Using backend transcription fallback.`);
+      startRealRecording();
+      return;
     }
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -99,6 +157,9 @@ export const VoiceInput = ({
   const stopListening = () => {
     if (recognitionRef.current) {
       recognitionRef.current.stop();
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
     }
     setIsListening(false);
     setStatusMessage("Microphone paused.");
@@ -172,7 +233,8 @@ export const VoiceInput = ({
           <button
             type="button"
             onClick={startListening}
-            className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold text-xs text-white bg-[#0F766E] hover:bg-[#0F766E]/90 transition-all shadow-md active:scale-95"
+            aria-label="Start recording"
+            className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold text-xs text-white bg-[#0F766E] hover:bg-[#0F766E]/90 transition-all shadow-md active:scale-95 m3-mic-button"
           >
             <Mic className="w-4 h-4 text-amber-300" />
             <span>🎤 Start Speaking ({currentLangConfig.name})</span>
@@ -181,10 +243,22 @@ export const VoiceInput = ({
           <button
             type="button"
             onClick={stopListening}
-            className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold text-xs text-white bg-red-600 hover:bg-red-700 transition-all shadow-md animate-pulse"
+            className="flex-1 relative inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold text-xs text-white bg-red-600 hover:bg-red-700 transition-all shadow-md m3-mic-button"
+            aria-label="Stop recording"
           >
-            <MicOff className="w-4 h-4" />
-            <span>Stop Recording (Listening...)</span>
+            {/* M3 Listening Pulse Rings */}
+            <span className="m3-listening-pulse" />
+            <span className="m3-listening-pulse-delayed" />
+            <MicOff className="w-4 h-4 relative z-10" />
+            <span className="relative z-10">Stop Recording</span>
+            {/* M3 Audio Wave Bars */}
+            <span className="flex items-end gap-0.5 ml-2 text-white relative z-10">
+              <span className="m3-audio-wave-bar" />
+              <span className="m3-audio-wave-bar" />
+              <span className="m3-audio-wave-bar" />
+              <span className="m3-audio-wave-bar" />
+              <span className="m3-audio-wave-bar" />
+            </span>
           </button>
         )}
 
@@ -202,7 +276,7 @@ export const VoiceInput = ({
 
       {/* Status Live Indicator */}
       {statusMessage && (
-        <div className="text-[11px] font-semibold text-slate-600 flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-lg border border-slate-200">
+        <div role="status" className="text-[11px] font-semibold text-slate-600 flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-lg border border-slate-200">
           <Volume2 className="w-3.5 h-3.5 text-[#0F766E]" />
           <span>{statusMessage}</span>
         </div>

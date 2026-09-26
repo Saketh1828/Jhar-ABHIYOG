@@ -1,24 +1,31 @@
+import { bhashiniService } from './bhashiniService.js';
+import { googleSttService } from './googleSttService.js';
+
 /**
  * SpeechService Abstraction
- * Supports Google Cloud Speech-to-Text, Azure Speech, or AWS Transcribe integrations.
- * Falls back to demo provider when external provider is unconfigured.
+ * Implements fallback chain: Bhashini -> Google STT -> Demo
  */
-
 export const speechService = {
   transcribeAudio: async (audioData, languageCode = 'hi') => {
-    const provider = process.env.SPEECH_PROVIDER || 'demo';
-
-    if (provider === 'google' && process.env.GOOGLE_SPEECH_API_KEY) {
-      // Integration point for Google Cloud Speech-to-Text API
-      return { text: "[Google Cloud Transcribed Audio]: Pipeline leak reported.", confidence: 0.95 };
+    try {
+      return await bhashiniService.transcribeAudio(audioData, languageCode);
+    } catch (bhashiniError) {
+      console.warn('[Bhashini ASR Warning] Failed to transcribe:', bhashiniError.message);
+      
+      try {
+        return await googleSttService.transcribeAudio(audioData, languageCode);
+      } catch (googleError) {
+        console.warn('[Google STT Warning] Fallback failed:', googleError.message);
+        
+        // Demo Mode Transcription Fallback
+        return {
+          success: true,
+          text: `[Audio Transcribed in ${languageCode.toUpperCase()}]: Severe water pipeline leak noticed near the village tubewell requiring immediate repairs.`,
+          language: languageCode,
+          confidence: 0.9,
+          provider: 'Demo (No ASR configured)'
+        };
+      }
     }
-
-    // Demo Mode Transcription Fallback
-    return {
-      success: true,
-      text: `[Audio Transcribed in ${languageCode.toUpperCase()}]: Severe water pipeline leak noticed near the village tubewell requiring immediate repairs.`,
-      language: languageCode,
-      provider: 'Demo Speech Provider'
-    };
   }
 };

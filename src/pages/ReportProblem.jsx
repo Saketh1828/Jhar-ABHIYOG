@@ -328,7 +328,7 @@ export const ReportProblem = () => {
 
           {/* AI Analysis Output Card (Section 15, 16, 17, 18, 20) */}
           {aiAnalysisResult && !isAiAnalyzing && (
-            <div className="p-5 bg-white rounded-xl border-2 border-emerald-400 shadow-md space-y-4 animate-fadeIn">
+            <div className="p-5 bg-white rounded-xl border-2 border-emerald-400 shadow-md space-y-4 m3-ticket-reveal">
               
               <div className="flex items-center justify-between border-b pb-3">
                 <div className="flex items-center gap-2">
@@ -341,7 +341,7 @@ export const ReportProblem = () => {
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs m3-severity-enter m3-stagger-1">
                 
                 <div className="p-3 bg-slate-50 rounded-lg border">
                   <span className="text-[10px] text-slate-400 font-bold uppercase block">Primary Category</span>
@@ -361,7 +361,7 @@ export const ReportProblem = () => {
               </div>
 
               {/* Recommended Receiver (Section 20) */}
-              <div className="p-4 bg-indigo-50/80 rounded-xl border border-indigo-200 space-y-1.5 text-xs">
+              <div className="p-4 bg-indigo-50/80 rounded-xl border border-indigo-200 space-y-1.5 text-xs m3-severity-enter m3-stagger-2">
                 <div className="flex justify-between items-center">
                   <span className="font-extrabold text-indigo-950 uppercase text-[10px]">Recommended Receiver</span>
                   <span className="bg-indigo-200 text-indigo-900 font-bold px-2 py-0.5 rounded text-[10px]">
@@ -375,7 +375,7 @@ export const ReportProblem = () => {
               </div>
 
               {/* Explainable Priority Reason (Section 17) */}
-              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs">
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs m3-severity-enter m3-stagger-3">
                 <span className="font-extrabold text-amber-950 block text-[10px] uppercase">Why was this priority assigned?</span>
                 <p className="text-amber-900 text-[11px] mt-0.5 font-medium">{aiAnalysisResult.whyPriority}</p>
               </div>

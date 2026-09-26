@@ -45,6 +45,10 @@ export const createProblem = async (req, res, next) => {
       receiverType: aiResult.receiverType,
       whyReceiver: aiResult.whyReceiver,
       assignedUniversity: aiResult.assignedUniversity,
+      detectedLanguage: aiResult.detectedLanguage || '',
+      summary: aiResult.summary || '',
+      remediationSuggestion: aiResult.remediationSuggestion || '',
+      priority: aiResult.priority || problemData.priority || 'MEDIUM',
       history: [
         {
           date: new Date().toISOString().split('T')[0],

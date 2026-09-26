@@ -47,7 +47,10 @@ const ProblemSchema = new mongoose.Schema({
   photos: [{ type: String }],
   history: [HistorySchema],
   resolutionDate: { type: String, default: '' },
-  resolutionDescription: { type: String, default: '' }
+  resolutionDescription: { type: String, default: '' },
+  detectedLanguage: { type: String, default: '' },
+  summary: { type: String, default: '' },
+  remediationSuggestion: { type: String, default: '' }
 }, { timestamps: true });
 
 export const Problem = mongoose.model('Problem', ProblemSchema);

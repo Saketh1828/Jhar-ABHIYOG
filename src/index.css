@@ -42,3 +42,106 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.6; }
 }
+
+/* ==============================
+   M3 Expressive Motion System
+   Scoped animations for voice input & ticket reveal
+   ============================== */
+
+/* M3 Listening Pulse */
+@keyframes m3-listening-pulse {
+  0% { transform: scale(1); opacity: 0.7; }
+  50% { transform: scale(1.6); opacity: 0; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+.m3-listening-pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(15, 118, 110, 0.3);
+  animation: m3-listening-pulse 1.5s cubic-bezier(0.42, 1.67, 0.21, 0.90) infinite;
+}
+
+.m3-listening-pulse-delayed {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(15, 118, 110, 0.2);
+  animation: m3-listening-pulse 1.5s cubic-bezier(0.42, 1.67, 0.21, 0.90) 0.3s infinite;
+}
+
+/* M3 Audio Wave Bars */
+@keyframes m3-audio-wave {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+
+.m3-audio-wave-bar {
+  display: inline-block;
+  width: 3px;
+  height: 16px;
+  margin: 0 1.5px;
+  border-radius: 2px;
+  background: currentColor;
+  transform-origin: bottom;
+  animation: m3-audio-wave 0.8s ease-in-out infinite;
+}
+
+.m3-audio-wave-bar:nth-child(1) { animation-delay: 0s; }
+.m3-audio-wave-bar:nth-child(2) { animation-delay: 0.1s; }
+.m3-audio-wave-bar:nth-child(3) { animation-delay: 0.2s; }
+.m3-audio-wave-bar:nth-child(4) { animation-delay: 0.3s; }
+.m3-audio-wave-bar:nth-child(5) { animation-delay: 0.15s; }
+
+/* M3 Ticket Reveal */
+@keyframes m3-ticket-reveal {
+  from { transform: scale(0.92); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.m3-ticket-reveal {
+  animation: m3-ticket-reveal 0.5s cubic-bezier(0.42, 1.67, 0.21, 0.90) forwards;
+}
+
+/* M3 Stagger Children */
+.m3-stagger-1 { animation-delay: 0ms; }
+.m3-stagger-2 { animation-delay: 50ms; }
+.m3-stagger-3 { animation-delay: 100ms; }
+.m3-stagger-4 { animation-delay: 150ms; }
+.m3-stagger-5 { animation-delay: 200ms; }
+
+/* M3 Severity Enter */
+@keyframes m3-severity-enter {
+  from { transform: translateY(8px) scale(0.9); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+.m3-severity-enter {
+  animation: m3-severity-enter 0.4s cubic-bezier(0.42, 1.67, 0.21, 0.90) forwards;
+  opacity: 0;
+}
+
+/* M3 Language Badge Enter */
+@keyframes m3-language-badge-enter {
+  from { transform: translateX(-8px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.m3-language-badge-enter {
+  animation: m3-language-badge-enter 0.35s cubic-bezier(0.42, 1.67, 0.21, 0.90) forwards;
+  opacity: 0;
+}
+
+/* M3 Mic Button Hover */
+.m3-mic-button {
+  transition: transform 0.2s cubic-bezier(0.42, 1.67, 0.21, 0.90), box-shadow 0.2s ease;
+}
+
+.m3-mic-button:hover {
+  transform: scale(1.05);
+}
+
+.m3-mic-button:active {
+  transform: scale(0.95);
+}
